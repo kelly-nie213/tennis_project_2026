@@ -119,6 +119,7 @@ def draw_speed_table(height, stats_row):
     return table
 
 
+# The following is the latest change that merge original features and newly generated features: Jan 1 2026
 # ======================================================
 # MAIN
 # ======================================================
