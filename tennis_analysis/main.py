@@ -177,9 +177,6 @@ def main():
     ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_dets)
     baseline_centers = mini_court.get_baseline_centers()
 
-    # ======================================================
-    # RECOVERY CONFIG
-    # ======================================================
     RECOVERY_RADIUS_METERS = 1.5
     RECOVERY_RADIUS_PX = (
         RECOVERY_RADIUS_METERS
@@ -190,9 +187,6 @@ def main():
     BALL_TOUCH_RADIUS_PX = 35
     RECOVERY_TOUCH_BUFFER = 10
 
-    # ======================================================
-    # RECOVERY TIME CALCULATION
-    # ======================================================
     recovery_times_by_frame = {}
 
     for i in range(len(ball_shot_frames) - 1):
@@ -213,15 +207,9 @@ def main():
 
         recovery_times_by_frame[start] = {opponent: recovery_time}
 
-    # ======================================================
-    # TOUCH TRACKING
-    # ======================================================
     player_ball_touch_time = {1: None, 2: None}
     player_circle_touch_time = {1: None, 2: None}
 
-    # ======================================================
-    # ORIGINAL STATS (UNCHANGED)
-    # ======================================================
     stats = [{
         "frame_num": 0,
         "player_1_number_of_shots": 0,
@@ -276,9 +264,6 @@ def main():
     df["player_1_average_player_speed"] = df["player_1_total_player_speed"] / df["player_2_number_of_shots"].replace(0, 1)
     df["player_2_average_player_speed"] = df["player_2_total_player_speed"] / df["player_1_number_of_shots"].replace(0, 1)
 
-    # ======================================================
-    # DRAWING
-    # ======================================================
     frames = player_tracker.draw_bboxes(video_frames, player_dets)
     frames = ball_tracker.draw_bboxes(frames, ball_dets)
     frames = court_detector.draw_keypoints_on_video(frames, court_kps)
@@ -295,6 +280,19 @@ def main():
     last_recovery_display = {1: 0, 2: 0}
 
     for i, frame in enumerate(frames):
+
+        # ===============================
+        # FRAME NUMBER (ADDED — ONLY CHANGE)
+        # ===============================
+        cv2.putText(
+            frame,
+            f"Frame: {i}",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0, 255, 0),
+            2
+        )
 
         if i in player_mc and i in ball_mc:
             for pid in player_mc[i]:
