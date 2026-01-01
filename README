@@ -1,9 +1,77 @@
-Validate the following is runanble
+# ScienceTennis Project
+
+Tools to analyze tennis videos using object detection (YOLOv8), tracking and simple post-processing.
+
+This repository contains code for detecting balls/players, tracking, and generating an output video plus optional LLM-based analysis on the results.
+
+## Highlights
+- YOLO-based inference and tracking for tennis match videos
+- Post-processing and analysis (ball/player tracking)
+- A small LLM-analysis step that consumes the produced output video/reports
+
+## Repository layout (top-level)
+- `tennis_analysis/` — main inference, tracking and analysis scripts
+- `llm/` — post-processing scripts (generate textual reports from the produced outputs)
+- `models/` — pre-trained model files (e.g. `yolov8x.pt`, `best.pt`)
+- `input_videos/` — source videos used for inference
+- `output_videos/` — generated videos and visualizations
+- `runs/` — intermediate/run outputs produced by YOLO/trackers
+
+## Requirements
+- Python 3.8+
+- PyTorch and the dependencies used by YOLOv8 (see `tennis_analysis/` for any requirements). If you use conda, the repository was originally run using a Conda Python binary at `/opt/miniconda3/bin/python`.
+
+Install common dependencies in a virtual environment or conda environment before running the scripts. Example (using pip):
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r tennis_analysis/requirements.txt  # if a requirements file exists
+```
+
+If you rely on a conda environment, activate it before running the commands.
+
+## Quickstart
+Run commands from the project root (`sciencetennis_project`). The repository contains runnable scripts; the original project used the full conda python path — those commands are preserved here and can be used as-is if your environment matches.
+
+1) Run YOLO inference (detect objects / generate intermediate results):
+
+```bash
 /opt/miniconda3/bin/python tennis_analysis/yolo_inference.py
+```
 
-To generate the output video, only run this following script in terminal under root folder
-/opt/miniconda3/bin/python tennis_analysis/main.py 
+2) Generate the final output video (main pipeline):
 
+```bash
+/opt/miniconda3/bin/python tennis_analysis/main.py
+```
 
-llm folder:
-it contains the script to run after output video is created. It will genreate the reports.
+Notes:
+- Running `main.py` from the repository root should create outputs under `output_videos/` and `runs/`.
+- If your environment's `python` is already the desired interpreter (virtualenv or conda), replace `/opt/miniconda3/bin/python` with `python`.
+
+## LLM / Report generation
+The `llm/` folder contains scripts that consume the generated output video and create textual reports. For example:
+
+- `llm/gemini_match_analysis.py` — run this script after you have produced the output video; it generates match-level summaries and saves them to `llm/match_summary.txt`.
+
+Example (after producing output video):
+
+```bash
+python llm/gemini_match_analysis.py
+```
+
+## Output
+- Visualized output videos are placed in `output_videos/`.
+- Intermediate detections/tracking runs are saved in `runs/` (see `runs/detect/track*`).
+
+## Troubleshooting
+- If models are missing, check `models/` — some checkpoints are large and may need to be downloaded manually.
+- If a script fails due to missing packages, install the required dependencies into your active environment.
+- If you're unsure which Python is used by scripts, run `which python` or `python -V` in your shell; adapt the example commands above accordingly.
+
+## Contact
+If you need help or want to contribute, open an issue in the repository or contact the maintainer.
+
+---
+Small edits: preserved the original runnable commands while providing a clearer structure and guidance for running and troubleshooting.
