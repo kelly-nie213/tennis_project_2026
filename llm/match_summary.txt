@@ -1,0 +1,24 @@
+```json
+{
+  "player_1": {
+    "strong_shots": [
+      "Defensive Backhand Slice (Frames 100-115): Player 1 utilizes a high defensive slice while under extreme pressure to reset the point and buy time to recover to the center."
+    ],
+    "weak_shots": [
+      "Passive Return Positioning (Frames 20-30): Player 1's return position is deep, allowing Player 2 to immediately dictate the rally with the first groundstroke."
+    ],
+    "footwork": "Defensive and reactive. Player 1 is forced to cover significantly more ground than the opponent, utilizing open-stance slides to reach wide balls. By Frame 210, Player 1 has traveled 74.29m, nearly double the distance of Player 2.",
+    "shot_tendencies": "Deep court defense. Player 1 consistently operates far behind the baseline (maintaining a Y-coordinate around 800-850 throughout most of the rally, e.g., Frame 85), relying on counter-punching rather than stepping in to take the ball early."
+  },
+  "player_2": {
+    "strong_shots": [
+      "Aggressive Forehand Drive (Frames 60-70): Player 2 hits a heavy shot (55.0 km/h) deep to the opponent's backhand.",
+      "Inside-In/Out Forehand (Frames 140-155): Player 2 recognizes the short ball and steps inside the baseline to strike an aggressive shot, maintaining high racquet head speed."
+    ],
+    "weak_shots": [],
+    "footwork": "Efficient and offensive. Player 2 maintains a tight position to the baseline (Y-coordinate hovering between 200-240, e.g., Frame 145), requiring minimal lateral movement (42.60m total traveled by Frame 210) to control the court.",
+    "shot_tendencies": "Baseline aggression. Player 2 looks to dictate with the forehand immediately after the serve, stepping forward into the court (Frame 135) to cut off angles and reduce the opponent's recovery time."
+  },
+  "overall_match_summary": "This sequence highlights a significant momentum disparity favoring Player 2 (Sonego). Player 2 is dictating the center of the court, forcing Player 1 (Djokovic) into a purely defensive role. The 'Distance Traveled' metric is the key indicator of court control here: Player 1 (74.29m) is working nearly twice as hard as Player 2 (42.60m) just to stay in the point (Frame 210). Player 2's shot speeds are consistent (peaking around 55.8 km/h), but it is their superior court positioning (inside the baseline vs. Player 1's deep positioning) that is deciding the rally."
+}
+```
