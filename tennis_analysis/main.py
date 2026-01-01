@@ -7,7 +7,6 @@ from utils import (
     read_video,
     save_video,
     measure_distance,
-    draw_player_stats,
     convert_pixel_distance_to_meters
 )
 import constants
@@ -22,142 +21,100 @@ from mini_court import MiniCourt
 INPUT_VIDEO = "/Users/kellynie/Desktop/sciencetennis_project/tennis_analysis/input_videos/input_video.mp4"
 OUTPUT_VIDEO = "/Users/kellynie/Desktop/sciencetennis_project/tennis_analysis/output_videos/output_video.mp4"
 
-TABLE_WIDTH = 320
+BALL_MODEL = "/Users/kellynie/Desktop/sciencetennis_project/tennis_analysis/models/last.pt"
+COURT_MODEL = "/Users/kellynie/Desktop/sciencetennis_project/tennis_analysis/models/keypoints_model.pth"
+
 FPS = 24
-
-RECOVERY_DIST_METERS = 2   # how close to baseline center = recovered
-
-
-# ======================================================
-# BOUNCE DETECTOR
-# ======================================================
-class BounceDetector:
-    def __init__(self, history=8, min_rise=8):
-        self.y_vals = []
-        self.history = history
-        self.min_rise = min_rise
-        self.in_fall = False
-        self.last_min_y = None
-        self.bounce_fired = False
-
-    def update(self, y):
-        if y is None:
-            return
-        self.y_vals.append(y)
-        if len(self.y_vals) > self.history:
-            self.y_vals.pop(0)
-
-    def get_bounce_status(self):
-        if len(self.y_vals) < 4:
-            return None
-
-        y_prev = self.y_vals[-2]
-        y_curr = self.y_vals[-1]
-
-        if y_curr > y_prev:
-            self.in_fall = True
-            self.last_min_y = y_curr
-            self.bounce_fired = False
-            return None
-
-        if self.in_fall:
-            self.last_min_y = min(self.last_min_y, y_curr)
-            if (y_prev - y_curr) > self.min_rise and not self.bounce_fired:
-                self.bounce_fired = True
-                self.in_fall = False
-                return "In" if self.last_min_y > 200 else "Out"
-
-        return None
-
-
-# ======================================================
-# RECOVERY TRACKER
-# ======================================================
-class RecoveryTracker:
-    def __init__(self):
-        self.active = {1: None, 2: None}
-        self.last_result = {1: None, 2: None}
-
-    def start(self, pid, frame_idx):
-        self.active[pid] = frame_idx
-
-    def update(self, pid, frame_idx, player_pos, baseline_center_px, px_to_meter):
-        start_frame = self.active[pid]
-        if start_frame is None:
-            return
-
-        dist_px = measure_distance(player_pos, baseline_center_px)
-        dist_m = dist_px * px_to_meter
-
-        if dist_m <= RECOVERY_DIST_METERS:
-            time_sec = (frame_idx - start_frame) / FPS
-            self.last_result[pid] = f"{time_sec:.2f}s"
-            self.active[pid] = None
-
-    def cancel_if_needed(self, pid):
-        if self.active[pid] is not None:
-            self.last_result[pid] = "No recovery"
-            self.active[pid] = None
+TABLE_WIDTH = 320
 
 
 # ======================================================
 # TABLE DRAWING
 # ======================================================
-def draw_table(height, ball_coords, player_coords, bounce_status, recovery_status):
+def draw_ball_table(height, ball_coords, last_ball_speed):
     table = np.full((height, TABLE_WIDTH, 3), 245, dtype=np.uint8)
 
     y = 40
-    dy = 28
+    dy = 32
 
-    # ---- BALL INFO ----
-    cv2.putText(table, "BALL INFO", (15, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 2)
-    y += dy
+    cv2.putText(table, "BALL INFO", (20, int(y)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+    y += dy * 2
 
     if ball_coords:
-        cv2.putText(table, f"Ball: {ball_coords}", (15, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        cv2.putText(table, f"X: {ball_coords[0]}", (20, int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+        y += dy
+        cv2.putText(table, f"Y: {ball_coords[1]}", (20, int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+        y += dy
     else:
-        cv2.putText(table, "Ball: not detected", (15, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (120, 120, 120), 2)
+        cv2.putText(table, "Ball not detected", (20, int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (120, 120, 120), 2)
+        y += dy * 2
 
-    # ---- PLAYER INFO ----
+    y += dy
+    cv2.putText(table, "Last Shot Speed", (20, int(y)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+    y += dy
+
+    if last_ball_speed > 0:
+        cv2.putText(table, f"{last_ball_speed:.1f} km/h", (20, int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 120, 0), 2)
+    else:
+        cv2.putText(table, "...", (20, int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (140, 140, 140), 2)
+
+    return table
+
+
+def draw_speed_table(height, stats_row):
+    table = np.full((height, TABLE_WIDTH, 3), 235, dtype=np.uint8)
+
+    y = 40
+    dy = 30
+
+    cv2.putText(table, "SPEED STATS", (20, int(y)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
     y += dy * 2
-    cv2.putText(table, "PLAYER INFO", (15, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 0), 2)
-    y += dy
 
     for pid in [1, 2]:
-        text = f"P{pid}: {player_coords.get(pid, '---')}"
-        cv2.putText(table, text, (15, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        cv2.putText(table, f"PLAYER {pid}", (20, int(y)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 0), 2)
         y += dy
 
-    # ---- RECOVERY ----
-    y += dy
-    cv2.putText(table, "RECOVERY", (15, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 0), 2)
-    y += dy
-
-    for pid in [1, 2]:
-        val = recovery_status.get(pid, "---")
-        cv2.putText(table, f"P{pid}: {val}", (15, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+        cv2.putText(
+            table,
+            f"Last Shot: {stats_row[f'player_{pid}_last_shot_speed']:.1f} km/h",
+            (20, int(y)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            2
+        )
         y += dy
 
-    # ---- BOUNCE ----
-    y += dy
-    cv2.putText(table, "BOUNCE", (15, y),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 0), 2)
-    y += dy
+        cv2.putText(
+            table,
+            f"Avg Shot: {stats_row[f'player_{pid}_average_shot_speed']:.1f} km/h",
+            (20, int(y)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            2
+        )
+        y += dy
 
-    if bounce_status:
-        color = (0, 180, 0) if bounce_status == "In" else (0, 0, 255)
-        cv2.putText(table, bounce_status, (15, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
-    else:
-        cv2.putText(table, "...", (15, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (140, 140, 140), 2)
+        cv2.putText(
+            table,
+            f"Avg Move: {stats_row[f'player_{pid}_average_player_speed']:.1f} km/h",
+            (20, int(y)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            2
+        )
+        y += dy * 1.5
 
     return table
 
@@ -166,81 +123,130 @@ def draw_table(height, ball_coords, player_coords, bounce_status, recovery_statu
 # MAIN
 # ======================================================
 def main():
-    frames = read_video(INPUT_VIDEO)
+    video_frames = read_video(INPUT_VIDEO)
 
+    # -------------------------------
+    # DETECTION
+    # -------------------------------
     player_tracker = PlayerTracker(model_path="yolov8x")
-    ball_tracker = BallTracker(
-        model_path="/Users/kellynie/Desktop/sciencetennis_project/tennis_analysis/models/last.pt"
-    )
+    ball_tracker = BallTracker(model_path=BALL_MODEL)
 
-    player_dets = player_tracker.detect_frames(frames)
-    ball_dets = ball_tracker.interpolate_ball_positions(
-        ball_tracker.detect_frames(frames)
-    )
+    player_dets = player_tracker.detect_frames(video_frames)
+    ball_dets = ball_tracker.detect_frames(video_frames)
+    ball_dets = ball_tracker.interpolate_ball_positions(ball_dets)
 
-    court_detector = CourtLineDetector(
-        "/Users/kellynie/Desktop/sciencetennis_project/tennis_analysis/models/keypoints_model.pth"
-    )
-    court_kps = court_detector.predict(frames[0])
+    # -------------------------------
+    # COURT
+    # -------------------------------
+    court_detector = CourtLineDetector(COURT_MODEL)
+    court_kps = court_detector.predict(video_frames[0])
     player_dets = player_tracker.choose_and_filter_players(court_kps, player_dets)
 
-    mini_court = MiniCourt(frames[0])
+    mini_court = MiniCourt(video_frames[0])
+
     player_mc, ball_mc = mini_court.convert_bounding_boxes_to_mini_court_coordinates(
         player_dets, ball_dets, court_kps
     )
 
-    # Baseline centers (mini-court space)
-    baseline_centers = mini_court.get_baseline_centers()
+    ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_dets)
 
-    px_to_meter = constants.DOUBLE_LINE_WIDTH / mini_court.get_width_of_mini_court()
+    # -------------------------------
+    # STATS CALCULATION
+    # -------------------------------
+    stats = [{
+        "frame_num": 0,
+        "player_1_number_of_shots": 0,
+        "player_1_total_shot_speed": 0,
+        "player_1_last_shot_speed": 0,
+        "player_1_total_player_speed": 0,
+        "player_1_last_player_speed": 0,
+        "player_2_number_of_shots": 0,
+        "player_2_total_shot_speed": 0,
+        "player_2_last_shot_speed": 0,
+        "player_2_total_player_speed": 0,
+        "player_2_last_player_speed": 0,
+    }]
 
-    bounce_detector = BounceDetector()
-    recovery_tracker = RecoveryTracker()
+    for i in range(len(ball_shot_frames) - 1):
+        start = ball_shot_frames[i]
+        end = ball_shot_frames[i + 1]
+        dt = (end - start) / FPS
+        if dt == 0:
+            continue
+
+        ball_dist_px = measure_distance(ball_mc[start][1], ball_mc[end][1])
+        ball_dist_m = convert_pixel_distance_to_meters(
+            ball_dist_px,
+            constants.DOUBLE_LINE_WIDTH,
+            mini_court.get_width_of_mini_court()
+        )
+        ball_speed = (ball_dist_m / dt) * 3.6
+
+        players = player_mc[start]
+        hitter = min(players.keys(),
+                     key=lambda p: measure_distance(players[p], ball_mc[start][1]))
+        opponent = 1 if hitter == 2 else 2
+
+        opp_dist_px = measure_distance(player_mc[start][opponent],
+                                       player_mc[end][opponent])
+        opp_dist_m = convert_pixel_distance_to_meters(
+            opp_dist_px,
+            constants.DOUBLE_LINE_WIDTH,
+            mini_court.get_width_of_mini_court()
+        )
+        opp_speed = (opp_dist_m / dt) * 3.6
+
+        cur = deepcopy(stats[-1])
+        cur["frame_num"] = start
+
+        cur[f"player_{hitter}_number_of_shots"] += 1
+        cur[f"player_{hitter}_total_shot_speed"] += ball_speed
+        cur[f"player_{hitter}_last_shot_speed"] = ball_speed
+
+        cur[f"player_{opponent}_total_player_speed"] += opp_speed
+        cur[f"player_{opponent}_last_player_speed"] = opp_speed
+
+        stats.append(cur)
+
+    df = pd.DataFrame(stats)
+    frames_df = pd.DataFrame({"frame_num": range(len(video_frames))})
+    df = pd.merge(frames_df, df, on="frame_num", how="left").ffill().fillna(0)
+
+    df["player_1_average_shot_speed"] = df["player_1_total_shot_speed"] / df["player_1_number_of_shots"].replace(0, 1)
+    df["player_2_average_shot_speed"] = df["player_2_total_shot_speed"] / df["player_2_number_of_shots"].replace(0, 1)
+    df["player_1_average_player_speed"] = df["player_1_total_player_speed"] / df["player_2_number_of_shots"].replace(0, 1)
+    df["player_2_average_player_speed"] = df["player_2_total_player_speed"] / df["player_1_number_of_shots"].replace(0, 1)
+
+    # -------------------------------
+    # DRAW VIDEO
+    # -------------------------------
+    frames = player_tracker.draw_bboxes(video_frames, player_dets)
+    frames = ball_tracker.draw_bboxes(frames, ball_dets)
+    frames = court_detector.draw_keypoints_on_video(frames, court_kps)
+
+    frames = mini_court.draw_mini_court(frames)
+    frames = mini_court.draw_points_on_mini_court(frames, player_mc)
+    frames = mini_court.draw_points_on_mini_court(frames, ball_mc, color=(0, 255, 255))
 
     final_frames = []
 
     for i, frame in enumerate(frames):
+        stats_row = df.iloc[i]
+
         ball_coords = None
         if ball_dets[i]:
             x1, y1, x2, y2 = next(iter(ball_dets[i].values()))
-            cx, cy = int((x1 + x2) / 2), int((y1 + y2) / 2)
-            ball_coords = (cx, cy)
-            bounce_detector.update(cy)
+            ball_coords = (int((x1 + x2) / 2), int((y1 + y2) / 2))
 
-        player_coords = {}
-        if player_dets[i]:
-            for pid, (x1, y1, x2, y2) in player_dets[i].items():
-                px, py = int((x1 + x2) / 2), int((y1 + y2) / 2)
-                player_coords[pid] = (px, py)
-
-        # ---- Detect shot (ball closest to player) ----
-        if ball_coords and player_coords:
-            shooter = min(
-                player_coords.keys(),
-                key=lambda p: measure_distance(player_coords[p], ball_coords)
-            )
-            recovery_tracker.start(shooter, i)
-            recovery_tracker.cancel_if_needed(1 if shooter == 2 else 2)
-
-        # ---- Update recovery ----
-        for pid in player_coords:
-            recovery_tracker.update(
-                pid,
-                i,
-                player_coords[pid],
-                baseline_centers[pid],
-                px_to_meter
-            )
-
-        table = draw_table(
-            frame.shape[0],
-            ball_coords,
-            player_coords,
-            bounce_detector.get_bounce_status(),
-            recovery_tracker.last_result
+        last_ball_speed = max(
+            stats_row["player_1_last_shot_speed"],
+            stats_row["player_2_last_shot_speed"]
         )
 
-        final_frames.append(np.hstack((frame, table)))
+        table1 = draw_ball_table(frame.shape[0], ball_coords, last_ball_speed)
+        table2 = draw_speed_table(frame.shape[0], stats_row)
+
+        final_frames.append(np.hstack((frame, table1, table2)))
 
     save_video(final_frames, OUTPUT_VIDEO)
 
