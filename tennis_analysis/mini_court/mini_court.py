@@ -301,3 +301,32 @@ class MiniCourt():
         1: (center_x, p1_y),
         2: (center_x, p2_y)
     }
+   
+   def draw_circle_on_mini_court(
+        self,
+        frames,
+        centers_dict,
+        radius,
+        color=(255, 0, 0),
+        thickness=2
+    ):
+        """
+        Draws a circle on the mini-court for each player.
+
+        centers_dict: {player_id: (x, y)} in mini-court coordinates
+        radius: radius in mini-court pixels
+        """
+
+        for i in range(len(frames)):
+            frame = frames[i]
+
+            for pid, center in centers_dict.items():
+                if center is None:
+                    continue
+
+                cx, cy = int(center[0]), int(center[1])
+                cv2.circle(frame, (cx, cy), radius, color, thickness)
+
+            frames[i] = frame
+
+        return frames
