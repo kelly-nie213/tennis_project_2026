@@ -34,72 +34,67 @@ TABLE_WIDTH = 320
 def draw_ball_table(height, ball_coords, player_coords, last_ball_speed, recovery_times):
     table = np.full((height, TABLE_WIDTH, 3), 245, dtype=np.uint8)
 
-    y = 40
-    dy = 30
+    y, dy = 40, 30
 
-    cv2.putText(table, "NEW FEATURES", (20, int(y)),
+    cv2.putText(table, "NEW FEATURES", (20, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
     y += dy * 2
 
     if ball_coords:
-        cv2.putText(table, f"Ball X: {ball_coords[0]}", (20, int(y)),
+        cv2.putText(table, f"Ball X: {ball_coords[0]}", (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
         y += dy
-        cv2.putText(table, f"Ball Y: {ball_coords[1]}", (20, int(y)),
+        cv2.putText(table, f"Ball Y: {ball_coords[1]}", (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 0, 0), 2)
         y += dy
     else:
-        cv2.putText(table, "Ball not detected", (20, int(y)),
+        cv2.putText(table, "Ball not detected", (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, (120, 120, 120), 2)
         y += dy * 2
 
     y += dy
-    cv2.putText(table, "Player Coordinates", (20, int(y)),
+    cv2.putText(table, "Player Coordinates", (20, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
     y += dy
 
     for pid in [1, 2]:
         if pid in player_coords:
-            px, py = player_coords[pid]
-            text = f"P{pid}: ({px}, {py})"
+            text = f"P{pid}: {player_coords[pid]}"
             color = (0, 0, 0)
         else:
             text = f"P{pid}: not detected"
             color = (120, 120, 120)
 
-        cv2.putText(table, text, (20, int(y)),
+        cv2.putText(table, text, (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         y += dy
 
     y += dy
-    cv2.putText(table, "Recovery Time (s)", (20, int(y)),
+    cv2.putText(table, "Recovery Time (s)", (20, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
     y += dy
 
     for pid in [1, 2]:
         val = recovery_times.get(pid, 0)
-
         if val == -1:
-            text = f"P{pid}: no recovery"
-            color = (0, 0, 255)
+            text, color = f"P{pid}: no recovery", (0, 0, 255)
         else:
-            text = f"P{pid}: {val:.2f}s"
-            color = (0, 120, 0)
+            text, color = f"P{pid}: {val:.2f}s", (0, 120, 0)
 
-        cv2.putText(table, text, (20, int(y)),
+        cv2.putText(table, text, (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         y += dy
 
     y += dy
-    cv2.putText(table, "Last Shot Speed", (20, int(y)),
+    cv2.putText(table, "Last Shot Speed", (20, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
     y += dy
 
     if last_ball_speed > 0:
-        cv2.putText(table, f"{last_ball_speed:.1f} km/h", (20, int(y)),
+        cv2.putText(table, f"{last_ball_speed:.1f} km/h", (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 120, 0), 2)
     else:
-        cv2.putText(table, "...", (20, int(y)),
+        cv2.putText(table, "...", (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, (140, 140, 140), 2)
 
     return table
@@ -151,7 +146,7 @@ def draw_speed_table(height, stats_row):
             (0, 0, 0),
             2
         )
-        y += dy * 1.5
+        y += int(dy * 1.5)
 
     return table
 
@@ -180,12 +175,11 @@ def main():
     )
 
     ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_dets)
-
-    # -------------------------------
-    # RECOVERY TIME + RADIUS (1.5 m)
-    # -------------------------------
     baseline_centers = mini_court.get_baseline_centers()
 
+    # ======================================================
+    # RECOVERY CONFIG
+    # ======================================================
     RECOVERY_RADIUS_METERS = 1.5
     RECOVERY_RADIUS_PX = (
         RECOVERY_RADIUS_METERS
@@ -193,15 +187,19 @@ def main():
         / constants.DOUBLE_LINE_WIDTH
     )
 
+    BALL_TOUCH_RADIUS_PX = 35
+    RECOVERY_TOUCH_BUFFER = 10
+
+    # ======================================================
+    # RECOVERY TIME CALCULATION
+    # ======================================================
     recovery_times_by_frame = {}
 
     for i in range(len(ball_shot_frames) - 1):
-        start = ball_shot_frames[i]
-        end = ball_shot_frames[i + 1]
+        start, end = ball_shot_frames[i], ball_shot_frames[i + 1]
 
         players = player_mc[start]
-        hitter = min(players.keys(),
-                     key=lambda p: measure_distance(players[p], ball_mc[start][1]))
+        hitter = min(players, key=lambda p: measure_distance(players[p], ball_mc[start][1]))
         opponent = 1 if hitter == 2 else 2
 
         recovery_time = -1
@@ -209,21 +207,21 @@ def main():
         for f in range(start, end):
             if opponent not in player_mc[f]:
                 continue
-
-            dist_px = measure_distance(
-                player_mc[f][opponent],
-                baseline_centers[opponent]
-            )
-
-            if dist_px <= RECOVERY_RADIUS_PX:
+            if measure_distance(player_mc[f][opponent], baseline_centers[opponent]) <= RECOVERY_RADIUS_PX:
                 recovery_time = (f - start) / FPS
                 break
 
         recovery_times_by_frame[start] = {opponent: recovery_time}
 
-    # -------------------------------
-    # STATS (UNCHANGED)
-    # -------------------------------
+    # ======================================================
+    # TOUCH TRACKING
+    # ======================================================
+    player_ball_touch_time = {1: None, 2: None}
+    player_circle_touch_time = {1: None, 2: None}
+
+    # ======================================================
+    # ORIGINAL STATS (UNCHANGED)
+    # ======================================================
     stats = [{
         "frame_num": 0,
         "player_1_number_of_shots": 0,
@@ -239,44 +237,34 @@ def main():
     }]
 
     for i in range(len(ball_shot_frames) - 1):
-        start = ball_shot_frames[i]
-        end = ball_shot_frames[i + 1]
+        start, end = ball_shot_frames[i], ball_shot_frames[i + 1]
         dt = (end - start) / FPS
         if dt == 0:
             continue
 
         ball_dist_px = measure_distance(ball_mc[start][1], ball_mc[end][1])
         ball_dist_m = convert_pixel_distance_to_meters(
-            ball_dist_px,
-            constants.DOUBLE_LINE_WIDTH,
-            mini_court.get_width_of_mini_court()
+            ball_dist_px, constants.DOUBLE_LINE_WIDTH, mini_court.get_width_of_mini_court()
         )
         ball_speed = (ball_dist_m / dt) * 3.6
 
         players = player_mc[start]
-        hitter = min(players.keys(),
-                     key=lambda p: measure_distance(players[p], ball_mc[start][1]))
+        hitter = min(players, key=lambda p: measure_distance(players[p], ball_mc[start][1]))
         opponent = 1 if hitter == 2 else 2
 
-        opp_dist_px = measure_distance(player_mc[start][opponent],
-                                       player_mc[end][opponent])
+        opp_dist_px = measure_distance(player_mc[start][opponent], player_mc[end][opponent])
         opp_dist_m = convert_pixel_distance_to_meters(
-            opp_dist_px,
-            constants.DOUBLE_LINE_WIDTH,
-            mini_court.get_width_of_mini_court()
+            opp_dist_px, constants.DOUBLE_LINE_WIDTH, mini_court.get_width_of_mini_court()
         )
         opp_speed = (opp_dist_m / dt) * 3.6
 
         cur = deepcopy(stats[-1])
         cur["frame_num"] = start
-
         cur[f"player_{hitter}_number_of_shots"] += 1
         cur[f"player_{hitter}_total_shot_speed"] += ball_speed
         cur[f"player_{hitter}_last_shot_speed"] = ball_speed
-
         cur[f"player_{opponent}_total_player_speed"] += opp_speed
         cur[f"player_{opponent}_last_player_speed"] = opp_speed
-
         stats.append(cur)
 
     df = pd.DataFrame(stats)
@@ -288,22 +276,16 @@ def main():
     df["player_1_average_player_speed"] = df["player_1_total_player_speed"] / df["player_2_number_of_shots"].replace(0, 1)
     df["player_2_average_player_speed"] = df["player_2_total_player_speed"] / df["player_1_number_of_shots"].replace(0, 1)
 
-    # -------------------------------
-    # DRAW
-    # -------------------------------
+    # ======================================================
+    # DRAWING
+    # ======================================================
     frames = player_tracker.draw_bboxes(video_frames, player_dets)
     frames = ball_tracker.draw_bboxes(frames, ball_dets)
     frames = court_detector.draw_keypoints_on_video(frames, court_kps)
-
     frames = mini_court.draw_mini_court(frames)
 
-    # 🔴 DRAW 1.5 m RECOVERY CIRCLES
     frames = mini_court.draw_circle_on_mini_court(
-        frames,
-        baseline_centers,
-        int(RECOVERY_RADIUS_PX),
-        color=(255, 0, 0),
-        thickness=2
+        frames, baseline_centers, int(RECOVERY_RADIUS_PX), (255, 0, 0), 2
     )
 
     frames = mini_court.draw_points_on_mini_court(frames, player_mc)
@@ -313,7 +295,22 @@ def main():
     last_recovery_display = {1: 0, 2: 0}
 
     for i, frame in enumerate(frames):
-        stats_row = df.iloc[i]
+
+        if i in player_mc and i in ball_mc:
+            for pid in player_mc[i]:
+                if measure_distance(player_mc[i][pid], ball_mc[i][1]) <= BALL_TOUCH_RADIUS_PX:
+                    if player_ball_touch_time[pid] is None:
+                        player_ball_touch_time[pid] = i / FPS
+
+        if i in player_mc:
+            for pid in player_mc[i]:
+                if measure_distance(player_mc[i][pid], baseline_centers[pid]) <= RECOVERY_RADIUS_PX + RECOVERY_TOUCH_BUFFER:
+                    if player_circle_touch_time[pid] is None:
+                        player_circle_touch_time[pid] = i / FPS
+
+        if i in recovery_times_by_frame:
+            for pid, val in recovery_times_by_frame[i].items():
+                last_recovery_display[pid] = val
 
         ball_coords = None
         if ball_dets[i]:
@@ -323,32 +320,23 @@ def main():
         player_coords = {}
         if player_dets[i]:
             for pid, (x1, y1, x2, y2) in player_dets[i].items():
-                player_coords[pid] = (
-                    int((x1 + x2) / 2),
-                    int((y1 + y2) / 2)
-                )
+                player_coords[pid] = (int((x1 + x2) / 2), int((y1 + y2) / 2))
 
         last_ball_speed = max(
-            stats_row["player_1_last_shot_speed"],
-            stats_row["player_2_last_shot_speed"]
+            df.iloc[i]["player_1_last_shot_speed"],
+            df.iloc[i]["player_2_last_shot_speed"]
         )
 
-        if i in recovery_times_by_frame:
-            for pid, val in recovery_times_by_frame[i].items():
-                last_recovery_display[pid] = val
-
-        table1 = draw_ball_table(
-            frame.shape[0],
-            ball_coords,
-            player_coords,
-            last_ball_speed,
-            last_recovery_display
-        )
-        table2 = draw_speed_table(frame.shape[0], stats_row)
+        table1 = draw_ball_table(frame.shape[0], ball_coords, player_coords,
+                                 last_ball_speed, last_recovery_display)
+        table2 = draw_speed_table(frame.shape[0], df.iloc[i])
 
         final_frames.append(np.hstack((frame, table1, table2)))
 
     save_video(final_frames, OUTPUT_VIDEO)
+
+    print("Player–Ball Touch Time:", player_ball_touch_time)
+    print("Player–Circle Touch Time:", player_circle_touch_time)
 
 
 if __name__ == "__main__":
