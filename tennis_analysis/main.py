@@ -31,8 +31,15 @@ TABLE_WIDTH = 320
 # ======================================================
 # TABLE DRAWING
 # ======================================================
-def draw_ball_table(height, ball_coords, player_coords, last_ball_speed,
-                    recovery_times, ball_in_out_status):
+def draw_ball_table(
+    height,
+    ball_coords,
+    player_coords,
+    last_ball_speed,
+    recovery_times,
+    ball_in_out_status,
+    distance_traveled
+):
     table = np.full((height, TABLE_WIDTH, 3), 245, dtype=np.uint8)
 
     y, dy = 40, 30
@@ -95,6 +102,23 @@ def draw_ball_table(height, ball_coords, player_coords, last_ball_speed,
 
         cv2.putText(table, text, (20, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        y += dy
+
+    y += dy
+    cv2.putText(table, "Distance Traveled (m)", (20, y),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+    y += dy
+
+    for pid in [1, 2]:
+        cv2.putText(
+            table,
+            f"P{pid}: {distance_traveled[pid]:.2f}",
+            (20, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 0, 0),
+            2
+        )
         y += dy
 
     y += dy
@@ -189,9 +213,6 @@ def main():
     ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_dets)
     baseline_centers = mini_court.get_baseline_centers()
 
-    # ===============================
-    # BALL BOUNCE IN / OUT (NEW)
-    # ===============================
     ball_in_out_status = "IN"
     bounce_frames = set(ball_shot_frames[1:])
 
@@ -294,6 +315,14 @@ def main():
     frames = mini_court.draw_points_on_mini_court(frames, player_mc)
     frames = mini_court.draw_points_on_mini_court(frames, ball_mc, color=(0, 255, 255))
 
+    # ===============================
+    # DISTANCE TRAVELED (FIXED)
+    # ===============================
+    distance_traveled = {1: 0.0, 2: 0.0}
+    distance_display = {1: 0.0, 2: 0.0}
+    last_positions = {1: None, 2: None}
+    DIST_UPDATE_FRAMES = int(2 * FPS)
+
     final_frames = []
     last_recovery_display = {1: 0, 2: 0}
 
@@ -308,6 +337,26 @@ def main():
             (0, 255, 0),
             2
         )
+
+        # inside main loop
+        if player_dets[i]:
+            for pid, (x1, y1, x2, y2) in player_dets[i].items():
+                center = (int((x1 + x2) / 2), int((y1 + y2) / 2))
+
+                if last_positions[pid] is not None:
+                    dist_px = measure_distance(last_positions[pid], center)
+                    dist_m = convert_pixel_distance_to_meters(
+                        dist_px,
+                        constants.DOUBLE_LINE_WIDTH,
+                        mini_court.get_width_of_mini_court()
+                    )
+                    distance_traveled[pid] += dist_m
+
+                last_positions[pid] = center
+
+        if i % DIST_UPDATE_FRAMES == 0:
+            distance_display[1] = distance_traveled[1]
+            distance_display[2] = distance_traveled[2]
 
         if i in bounce_frames and i in ball_mc:
             ball_pt = ball_mc[i][1]
@@ -352,17 +401,14 @@ def main():
             player_coords,
             last_ball_speed,
             last_recovery_display,
-            ball_in_out_status
+            ball_in_out_status,
+            distance_display
         )
         table2 = draw_speed_table(frame.shape[0], df.iloc[i])
 
         final_frames.append(np.hstack((frame, table1, table2)))
 
     save_video(final_frames, OUTPUT_VIDEO)
-
-    print("Player–Ball Touch Time:", player_ball_touch_time)
-    print("Player–Circle Touch Time:", player_circle_touch_time)
-
 
 if __name__ == "__main__":
     main()
