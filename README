@@ -1,0 +1,5 @@
+Validate the following is runanble
+/opt/miniconda3/bin/python tennis_analysis/yolo_inference.py
+
+To generate the output video, only run this following script in terminal under root folder
+/opt/miniconda3/bin/python tennis_analysis/main.py 
