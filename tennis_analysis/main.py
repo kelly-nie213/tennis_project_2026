@@ -31,7 +31,8 @@ TABLE_WIDTH = 320
 # ======================================================
 # TABLE DRAWING
 # ======================================================
-def draw_ball_table(height, ball_coords, player_coords, last_ball_speed, recovery_times):
+def draw_ball_table(height, ball_coords, player_coords, last_ball_speed,
+                    recovery_times, ball_in_out_status):
     table = np.full((height, TABLE_WIDTH, 3), 245, dtype=np.uint8)
 
     y, dy = 40, 30
@@ -53,6 +54,17 @@ def draw_ball_table(height, ball_coords, player_coords, last_ball_speed, recover
         y += dy * 2
 
     y += dy
+    cv2.putText(
+        table,
+        f"Ball Bounce: {ball_in_out_status}",
+        (20, y),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0, 150, 0) if ball_in_out_status == "IN" else (0, 0, 255),
+        2
+    )
+    y += dy * 2
+
     cv2.putText(table, "Player Coordinates", (20, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
     y += dy
@@ -177,6 +189,12 @@ def main():
     ball_shot_frames = ball_tracker.get_ball_shot_frames(ball_dets)
     baseline_centers = mini_court.get_baseline_centers()
 
+    # ===============================
+    # BALL BOUNCE IN / OUT (NEW)
+    # ===============================
+    ball_in_out_status = "IN"
+    bounce_frames = set(ball_shot_frames[1:])
+
     RECOVERY_RADIUS_METERS = 1.5
     RECOVERY_RADIUS_PX = (
         RECOVERY_RADIUS_METERS
@@ -281,9 +299,6 @@ def main():
 
     for i, frame in enumerate(frames):
 
-        # ===============================
-        # FRAME NUMBER (ADDED — ONLY CHANGE)
-        # ===============================
         cv2.putText(
             frame,
             f"Frame: {i}",
@@ -293,6 +308,12 @@ def main():
             (0, 255, 0),
             2
         )
+
+        if i in bounce_frames and i in ball_mc:
+            ball_pt = ball_mc[i][1]
+            ball_in_out_status = (
+                "IN" if mini_court.is_point_inside_court(ball_pt) else "OUT"
+            )
 
         if i in player_mc and i in ball_mc:
             for pid in player_mc[i]:
@@ -325,8 +346,14 @@ def main():
             df.iloc[i]["player_2_last_shot_speed"]
         )
 
-        table1 = draw_ball_table(frame.shape[0], ball_coords, player_coords,
-                                 last_ball_speed, last_recovery_display)
+        table1 = draw_ball_table(
+            frame.shape[0],
+            ball_coords,
+            player_coords,
+            last_ball_speed,
+            last_recovery_display,
+            ball_in_out_status
+        )
         table2 = draw_speed_table(frame.shape[0], df.iloc[i])
 
         final_frames.append(np.hstack((frame, table1, table2)))
