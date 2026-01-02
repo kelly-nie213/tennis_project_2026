@@ -114,7 +114,7 @@ def format_summary(raw_text):
 
     def format_player(player_name, player_data):
         text = []
-        text.append(f"## 🎾 **{player_name.replace('_', ' ').title()}**\n")
+        text.append(f"## **{player_name.replace('_', ' ').title()}**\n")
 
         text.append("**Strong Shots:**")
         if player_data["strong_shots"]:
@@ -136,11 +136,11 @@ def format_summary(raw_text):
         return "\n".join(text)
 
     report = []
-    report.append("# 🏆 **Tennis Match Performance Report**\n")
+    report.append("# **Tennis Match Performance Report**\n")
     report.append(format_player("player_1", data["player_1"]))
     report.append(format_player("player_2", data["player_2"]))
 
-    report.append("## 📊 **Overall Match Summary**")
+    report.append("## **Overall Match Summary**")
     report.append(f"*{data['overall_match_summary']}*")
 
     return "\n\n".join(report)
