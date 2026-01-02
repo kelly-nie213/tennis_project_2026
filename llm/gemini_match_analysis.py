@@ -1,6 +1,8 @@
 import argparse
 import cv2
 import base64
+import json
+import re
 from google import genai
 from google.genai import types
 
@@ -87,6 +89,63 @@ def extract_frames(video_path, stride):
     return frames
 
 # ============================
+# JSON CLEANING (NEW FIX)
+# ============================
+def extract_json(text):
+    if not text.strip():
+        raise ValueError("Gemini returned empty response")
+
+    # Remove ```json fences if present
+    text = re.sub(r"```json|```", "", text).strip()
+
+    # Extract first JSON object
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError("No JSON object found in Gemini response")
+
+    return match.group(0)
+
+# ============================
+# FORMAT OUTPUT
+# ============================
+def format_summary(raw_text):
+    json_text = extract_json(raw_text)
+    data = json.loads(json_text)
+
+    def format_player(player_name, player_data):
+        text = []
+        text.append(f"## 🎾 **{player_name.replace('_', ' ').title()}**\n")
+
+        text.append("**Strong Shots:**")
+        if player_data["strong_shots"]:
+            for s in player_data["strong_shots"]:
+                text.append(f"- **{s}**")
+        else:
+            text.append("- *None identified*")
+
+        text.append("\n**Weak Shots:**")
+        if player_data["weak_shots"]:
+            for w in player_data["weak_shots"]:
+                text.append(f"- **{w}**")
+        else:
+            text.append("- *None identified*")
+
+        text.append(f"\n**Footwork Analysis:**\n*{player_data['footwork']}*")
+        text.append(f"\n**Shot Tendencies:**\n*{player_data['shot_tendencies']}*\n")
+
+        return "\n".join(text)
+
+    report = []
+    report.append("# 🏆 **Tennis Match Performance Report**\n")
+    report.append(format_player("player_1", data["player_1"]))
+    report.append(format_player("player_2", data["player_2"]))
+
+    report.append("## 📊 **Overall Match Summary**")
+    report.append(f"*{data['overall_match_summary']}*")
+
+    return "\n\n".join(report)
+
+# ============================
 # GEMINI CALL
 # ============================
 def analyze_match(api_key):
@@ -115,12 +174,13 @@ def analyze_match(api_key):
         contents=[types.Content(parts=parts)]
     )
 
-    summary_text = response.text or ""
+    raw_text = response.text or ""
+    formatted_text = format_summary(raw_text)
 
     with open(OUTPUT_TEXT_PATH, "w", encoding="utf-8") as f:
-        f.write(summary_text)
+        f.write(formatted_text)
 
-    print(f"\nMatch summary saved to: {OUTPUT_TEXT_PATH}\n")
+    print(f"\nFormatted match summary saved to: {OUTPUT_TEXT_PATH}\n")
 
 # ============================
 # RUN
